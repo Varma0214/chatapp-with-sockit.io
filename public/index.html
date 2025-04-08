@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat App</title>
+  </head>
+  <body>
+    <div id="auth">
+      <h2>Signup</h2>
+      <input type="text" id="signup-username" placeholder="Username" required />
+      <input type="email" id="signup-email" placeholder="Email" required />
+      <input type="password" id="signup-password" placeholder="Password" required />
+      <button onclick="signup()">Signup</button>
+
+      <h2>Login</h2>
+      <input type="email" id="login-email" placeholder="Email" required />
+      <input type="password" id="login-password" placeholder="Password" required />
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="chat-container" style="display: none">
+      <h3>Online Users</h3>
+      <ul id="users"></ul>
+
+      <div id="chat"></div>
+      <form id="message-form">
+        <input type="text" id="message-input" placeholder="Enter message" required />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+      let userName = "";
+
+      function signup() {
+        const username = document.getElementById("signup-username").value.trim();
+        const email = document.getElementById("signup-email").value.trim();
+        const password = document.getElementById("signup-password").value.trim();
+
+        if (!username || !email || !password) {
+          alert("All fields are required!");
+          return;
+        }
+
+        fetch("http://localhost:5000/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: username, email, password }),
+        })
+          .then((res) => res.json())
+          .then((data) => alert(data.message))
+          .catch((err) => console.error("Signup Error:", err));
+      }
+
+      function login() {
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value.trim();
+
+        if (!email || !password) {
+          alert("Email and password are required!");
+          return;
+        }
+
+        fetch("http://localhost:5000/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.token) {
+              localStorage.setItem("token", data.token);
+              userName = email; // Using email as username
+              document.getElementById("auth").style.display = "none";
+              document.getElementById("chat-container").style.display = "block";
+              socket.emit("join", userName);
+            } else {
+              alert(data.message);
+            }
+          })
+          .catch((err) => console.error("Login Error:", err));
+      }
+
+      socket.on("userJoined", (user) => {
+        addMessage(`${user} has joined the chat`);
+      });
+
+      socket.on("userLeft", (user) => {
+        addMessage(`${user} has left the chat`);
+      });
+
+      socket.on("userList", (users) => {
+        document.getElementById("users").innerHTML = users.map((user) => `<li>${user}</li>`).join("");
+      });
+
+      socket.on("chatMessage", (message) => {
+        addMessage(`${message.userName}: ${message.text}`);
+      });
+
+      document.getElementById("message-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const messageInput = document.getElementById("message-input");
+        const messageText = messageInput.value.trim();
+
+        if (messageText) {
+          socket.emit("chatMessage", { userName, text: messageText });
+          messageInput.value = "";
+        }
+      });
+
+      function addMessage(input) {
+        const messageElement = document.createElement("div");
+        messageElement.textContent = input;
+        document.getElementById("chat").appendChild(messageElement);
+      }
+    </script>
+  </body>
+</html>
